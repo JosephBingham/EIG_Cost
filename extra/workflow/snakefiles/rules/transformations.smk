@@ -1,0 +1,59 @@
+"""
+Data transformation rules for evaluation results.
+
+Handles transformations on evaluation results:
+- Adding evaluation metadata (eval_soft_budget_param)
+- Removing unnecessary columns (prev_selections_performed)
+- Adding training metadata (method, dataset, seeds, budgets)
+- Pivoting classifier columns to tidy data format
+"""
+
+
+rule transform_eval_data:
+    """Transform raw evaluation data to final format for plotting.
+
+    Applies all transformations in sequence:
+    1. Add eval metadata (eval_soft_budget_param column)
+    2. Remove selections history column (saves space)
+    3. Add training metadata columns
+    4. Pivot classifier columns to tidy data format
+    """
+    input:
+        f"extra/output/eval_results/eval_split-{EVAL_DATASET_SPLIT}/{INITIALIZER_TAG}/{{method}}/"
+            "dataset-{dataset}+"
+            "instance_idx-{dataset_instance_idx}/"
+                "{pretrain_folder}"
+                    "train_seed-{train_seed}+"
+                    "train_hard_budget-{train_hard_budget}+"
+                    "train_soft_budget_param-{train_soft_budget_param}/"
+                        "eval_seed-{eval_seed}+"
+                        "eval_hard_budget-{eval_hard_budget}+"
+                        "eval_soft_budget_param-{eval_soft_budget_param}/"
+                            "eval_data.csv",
+    output:
+        f"extra/output/eval_results_transformed/eval_split-{EVAL_DATASET_SPLIT}/{INITIALIZER_TAG}/{{method}}/"
+            "dataset-{dataset}+"
+            "instance_idx-{dataset_instance_idx}/"
+                "{pretrain_folder}"
+                    "train_seed-{train_seed}+"
+                    "train_hard_budget-{train_hard_budget}+"
+                    "train_soft_budget_param-{train_soft_budget_param}/"
+                        "eval_seed-{eval_seed}+"
+                        "eval_hard_budget-{eval_hard_budget}+"
+                        "eval_soft_budget_param-{eval_soft_budget_param}/"
+                            "eval_data.parquet",
+    resources:
+        shell_exec="bash"
+    shell:
+        """
+        python scripts/misc/transform_eval_data_pipeline.py \
+            --input_path {input} \
+            --output_path {output} \
+            --method {wildcards.method} \
+            --dataset {wildcards.dataset} \
+            --initializer {INITIALIZER} \
+            --train_seed {wildcards.train_seed} \
+            --train_hard_budget {wildcards.train_hard_budget} \
+            --train_soft_budget_param {wildcards.train_soft_budget_param} \
+            --eval_soft_budget_param {wildcards.eval_soft_budget_param}
+        """

@@ -1,0 +1,13 @@
+batch_size: 256
+hard_budget: 20
+
+selector:
+  lr: 0.001
+  nepochs: 200
+  num_cells: [256, 128]
+  patience: 5
+
+classifier:
+  lr: 0.001
+  nepochs: 200
+  num_cells: [256, 128]

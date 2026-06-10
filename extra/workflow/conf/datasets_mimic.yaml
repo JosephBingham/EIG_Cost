@@ -1,0 +1,13 @@
+datasets:
+  - mimic_iv
+  - mimic_iv_5class
+mimic_iv:
+     path: extra/data/mimic_iv/
+     n_features: 55
+     n_groups: 30
+     n_classes: 21
+mimic_iv_5class:
+     path: extra/data/mimic_iv_5class/
+     n_features: 54
+     n_groups: 29
+     n_classes: 5

@@ -1,0 +1,5 @@
+class_name: "SyntheticMNISTDataset"
+kwargs:
+  n_samples: 10000 # Reasonable default (60k uses ~200MB RAM, takes longer to generate)
+  noise_std: 0.0
+  pattern_intensity: 0.8

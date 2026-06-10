@@ -1,0 +1,3 @@
+class_name: "MiniBooNEDataset"
+kwargs:
+  root: "extra/data/misc/miniboone.csv"

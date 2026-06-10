@@ -1,0 +1,5 @@
+batch_size: 256
+classifier_epochs: 50
+mae_epochs: 30
+n_mc_samples: 300
+cost_lambda: 0.005

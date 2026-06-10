@@ -1,138 +1,162 @@
-# AFA Benchmark
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
-[![arXiv](https://img.shields.io/badge/arXiv-2508.14734-b31b1b.svg)](https://arxiv.org/abs/2508.14734)
+# EIG-Cost: Cost-Aware Active Feature Acquisition for Clinical Differential Diagnosis
 
-**A comprehensive benchmark for Active Feature Acquisition (AFA) methods**
+Code and benchmark for the paper:
 
-Compare state-of-the-art algorithms for sequential feature selection in
-scenarios where acquiring features is costly. Includes implementations of
-multiple AFA methods, standardized datasets, and automated evaluation pipelines.
+> **EIG-Cost: Cost-Aware Active Feature Acquisition for Clinical Differential Diagnosis**  
+> Joseph Bingham - Faculty of Biology, Technion – Israel Institute of Technology
+> Netanel Arussy — Faculty of Computer Science, Technion – Israel Institute of Technology  
+> *Artificial Intelligence in Medicine* (under review)
 
-## Installation
+EIG-Cost selects the next diagnostic test panel by maximising Expected Information Gain penalised by real 2026 Medicare CPT costs:
 
-[uv](https://docs.astral.sh/uv/getting-started/installation/) is the only external dependency.
+```
+score(j) = EIG(j | x_obs) - λ · cost(j)
+```
+
+It is evaluated against nine AFA baselines on a 202,971-patient MIMIC-IV benchmark spanning 21 acute conditions.
+
+---
+
+## Requirements
+
+- Python 3.12 (managed via [uv](https://github.com/astral-sh/uv))
+- MIMIC-IV v2.2 access ([PhysioNet credentialing required](https://physionet.org/content/mimiciv/))
 
 ```bash
-# Clone repository
-git clone https://github.com/Linusaronsson/AFA-Benchmark.git
-cd AFA-Benchmark
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install dependencies with uv
+# Create environment and install dependencies
 uv sync
 ```
 
-## Quickstart
+All pipeline commands use `uv run` — do not use the system Python.
 
-To run the pipeline locally with 8 cores, execute the following command at the repo root. It should produce plots at `extra/output/plot_results/`.
+---
 
-```shell
-WANDB_PROJECT=afabench uv run snakemake \
-    -s extra/workflow/snakefiles/orchestration/pipeline.smk \
-    all \
-    --configfile \
-      extra/workflow/conf/eval_hard_budgets.yaml \
-      extra/workflow/conf/methods.yaml \
-      extra/workflow/conf/method_sets.yaml \
-      extra/workflow/conf/method_options.yaml \
-      extra/workflow/conf/pretrain_mapping.yaml \
-      extra/workflow/conf/soft_budget_params.yaml \
-      extra/workflow/conf/unmaskers.yaml \
-      extra/workflow/conf/classifier_names.yaml \
-      extra/workflow/conf/datasets_main.yaml \
-    --config \
-      eval_dataset_split=test \
-      "dataset_instance_indices=[0,1,2,3,4]" \
-      smoke_test=false \
-      use_wandb=true \
-      device=cpu \
-    --jobs 8
+## Data Setup
+
+**1. Obtain MIMIC-IV access** at [PhysioNet](https://physionet.org/content/mimiciv/).
+
+**2. Build the 21-condition cohort:**
+```bash
+python3 scripts/cohort/build_cohort.py \
+    --mimic-dir /path/to/mimic-iv \
+    --out extra/data/mimic_iv
 ```
 
-See the [pipeline explanation](docs/tutorials/pipeline_explanation.md) tutorial for details on how this pipeline works and how to customize it.
+**3. Build the 5-condition subset** (DKA, MI, pancreatitis, sepsis, stroke):
+```bash
+python3 scripts/cohort/build_cohort.py \
+    --mimic-dir /path/to/mimic-iv \
+    --out extra/data/mimic_iv_5class \
+    --conditions diabetic_emergency myocardial_infarction pancreatitis sepsis stroke
+```
 
-## Features
+Expected outputs: `X_train/val/test.npy`, `y_train/val/test.npy`, `costs.npy`, `groups.json`, `metadata.json` in each data directory.
 
-- Easily readable and reproducible configuration using
-  [hydra](https://hydra.cc/) and [snakemake](https://snakemake.readthedocs.io/en/stable/).
-- Modular design: rerun specific parts of the pipeline as needed.
-- Extensible framework: add custom datasets and AFA methods.
+---
 
-## Limitations
-- Supports only classification tasks; regression tasks are not yet implemented.
+## Running the Pipeline
 
-## What is Active Feature Acquisition?
-**Active Feature Acquisition (AFA)** addresses scenarios where,
+The full pipeline (train all methods → evaluate → aggregate → plot) is orchestrated with Snakemake + Hydra:
 
-- **Features are expensive** to obtain (medical tests, surveys, sensors),
-- **Real-time decisions** must be made with partial information,
-- **Budget constraints** limit which features you can acquire.
+```bash
+nohup ./run.sh > pipeline.log 2>&1 &
+echo "PID: $!"
+```
 
-**Example**: Medical diagnosis where each test costs money and time. AFA methods
-intelligently decide which tests to order next based on previous results, aiming
-for accurate diagnosis with minimal cost. See the following survey for details: [AFA Survey](https://arxiv.org/abs/2502.11067). 
+Monitor progress:
+```bash
+grep "steps.*done" pipeline.log | tail -5
+```
 
-## Implemented Methods
-|    Method     |                                                                            Paper                                                                             |             Strategy             |  Greedy?   |
-| :-----------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------: | :------------------------------: | :--------: |
-|  **EDDI-GG**  |                                                       [link](https://proceedings.mlr.press/v97/ma19c)                                                        |   Generative estimation of CMI   |   Greedy   |
-|  **GDFS-DG**  |                                                     [link](https://proceedings.mlr.press/v202/covert23a)                                                     | Discriminative estimation of CMI |   Greedy   |
-|  **DIME-DG**  |                                                           [link](https://arxiv.org/pdf/2306.03301)                                                           | Discriminative estimation of CMI |   Greedy   |
-| **JAFA-MFRL** |                          [link](https://papers.nips.cc/paper_files/paper/2018/hash/e5841df2166dd424a57127423d276bbe-Abstract.html)                           |          Model-free RL           | Non-greedy |
-|  **OL-MFRL**  |                                                           [link](https://arxiv.org/pdf/1901.00243)                                                           |          Model-free RL           | Non-greedy |
-| **ODIN-MFRL** | [link](https://www.microsoft.com/en-us/research/publication/odin-optimal-discovery-of-high-value-information-using-model-based-deep-reinforcement-learning/) |          Model-free RL           | Non-greedy |
-| **ODIN-MBRL** | [link](https://www.microsoft.com/en-us/research/publication/odin-optimal-discovery-of-high-value-information-using-model-based-deep-reinforcement-learning/) |          Model-based RL          | Non-greedy |
-|   **AACO**    |                                                 [link](https://proceedings.mlr.press/v235/valancius24a.html)                                                 |           Oracle-based           | Non-greedy |
-|   **PT-S**    |                                              [link](https://link.springer.com/article/10.1023/A:1010933404324)                                               |    Global feature importance     |    N/A     |
-|   **CAE-S**   |                                                   [link](https://proceedings.mlr.press/v97/balin19a.html)                                                    |    Global feature importance     |    N/A     |
+Training EIG-Cost alone (one bundle, one budget):
+```bash
+uv run python scripts/train/eig_cost.py \
+    train_dataset_bundle_path=extra/output/datasets/mimic_iv/0/train.bundle \
+    val_dataset_bundle_path=extra/output/datasets/mimic_iv/0/val.bundle \
+    classifier_bundle_path=extra/output/trained_classifiers/initializer-cold/dataset-mimic_iv.bundle \
+    save_path=extra/output/trained_methods/.../method.bundle \
+    hard_budget=30 device=cpu seed=0 \
+    experiment@_global_=mimic_iv
+```
 
-## Datasets
-| Dataset | Type | Modality | Train Size | Val Size | Test Size | \# Features | \# Groups | \# Classes |
-| :-----: | :--: | :------: | :--------: | :------: | :-------: | :---------: | :-------: | :--------: |
-| CUBE | Synthetic | Tabular | 600 | 200 | 200 | 20 | | 20 | 8 |
-| CUBE-NM | Synthetic | Tabular | 600 | 200 | 200 | 33 | 33 | 8 |
-| MNIST | Real World | Image (tabularized) | 36,000 | 12,000 | 12,000 | 784 | 784 | 10 |
-| FashionMNIST | Real World | Image (tabularized) | 36,000 | 12,000 | 12,000 | 784 | 784 | 10 |
-| Diabetes | Real World | Tabular | 55,237 | 18,412 | 18,413 | 45 | 45 | 3 | |
-| PhysioNet | Real World | Tabular | 7,200 | 2,400 | 2,400 | 41 | 41 | 2 |
-| MiniBooNE | Real World | Tabular | 78,038 | 26,012 | 26,014 | 50 | 50 | 2 |
-| ACTG175 | Real World | Tabular | 1,283 | 427 | 429 | 23 | 23 | | 2 |
-| CKD | Real World | Tabular | 240 | 80 | 80 | 24 | 24 | 2 |
-| BankMarketing | Real World | Tabular | 27,126 | 9,042 | 9,043 | 16 | 16 | 2 |
-| Imagenette | Real World | Image | 5,681 | 3,788 | 3,925 | 150,528 | 196 | 10 |
+---
 
-## Project structure
-- `afabench`: Main package.
-- `docs`: Documentation.
-- `extra`: Saved methods, data, logs and so on, non-source code files.
-    - `conf`: This is where all the **script** configuration files are. Each configuration file
-      corresponds to a class in `config_classes.py`.
-    - `data`: Where miscellaneous files for datasets (e.g., CSVs, custom generated costs, etc.) are stored.
-    - `workflow`: Snakemake workflows for running the full pipeline.
-    - `output`: Folder where outputs from the snakemake pipeline are stored.
-- `scripts/`: Folder of scripts, many of which are called from the snakemake pipeline.
-- `test`: Tests.
-  - `src`: Tests related to library code in `afabench`.
-  - `scripts`: Tests related to specific scripts in `scripts`.
+## Key Hyperparameters
 
-## Tutorials
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `λ` (cost penalty) | 0.005 | Penalises \$1 cost ≈ 5×10⁻³ nats EIG |
+| `n_mc_samples` | 50 | Monte Carlo samples per candidate panel |
+| Classifier hidden dims | [256, 128, 64] | MaskableClassifier MLP |
+| CVAE latent dim | 64 | TabularMAE latent space |
+| Classifier epochs | 50 | Adam, lr=1e-3, batch=256 |
+| CVAE epochs | 30 | Adam, lr=5e-4, batch=256 |
 
-Learn more in our tutorials:
-  - [Pipeline explanation](docs/tutorials/pipeline_explanation.md)
-  - [Adding a new dataset](docs/tutorials/add_dataset.md)
-  - [Adding a new method](docs/tutorials/add_method.md)
+---
 
+## Results Summary
+
+**21-condition cohort, budget \$30** (mean ± SD, 3 seeds):
+
+| Method | Macro-F1 | Accuracy | Vol. Stop |
+|--------|----------|----------|-----------|
+| **EIG-Cost (ours)** | **0.180 ± 0.012** | **0.265 ± 0.010** | 0.0% |
+| AACO-NN | 0.169 ± 0.011 | 0.244 ± 0.009 | 0.0% |
+| AACO | 0.162 ± 0.009 | 0.233 ± 0.008 | 0.0% |
+| DIME | 0.027 ± 0.002 | 0.103 ± 0.002 | 96.9% |
+| OL (w/ mask) | 0.018 ± 0.001 | 0.099 ± 0.001 | 100.0% |
+
+Seven of nine baselines exhibit ≥87% voluntary stop rates (*baseline collapse*) — they predict via class priors without acquiring any features.
+
+Full results in `extra/output/analysis/`.
+
+---
+
+## Repository Structure
+
+```
+AFA-Benchmark/
+├── afabench/
+│   ├── eig_cost/           # EIG-Cost method (afa_method.py, models.py)
+│   └── common/             # Shared utilities, registry, bundle I/O
+├── scripts/
+│   ├── train/eig_cost.py   # Training entry point (Hydra)
+│   └── eval/               # Evaluation scripts
+├── extra/
+│   ├── conf/               # Hydra configs (EIG-Cost + all baselines)
+│   ├── data/               # Cohort data (not tracked — requires MIMIC-IV)
+│   ├── output/             # Pipeline outputs (not tracked)
+│   └── workflow/           # Snakemake orchestration
+├── run.sh                  # Pipeline entry point
+└── paper/                  # LaTeX source, figures, references
+```
+
+---
+
+## Costs
+
+Acquisition costs are derived from the 2026 Medicare Physician Fee Schedule (CPT codes). The cost vector is stored in `extra/data/mimic_iv/costs.npy` (shape: `[55]`, units: USD). Total full-panel cost: \$408.80.
+
+---
 
 ## Citation
-If you use this benchmark in your research, please cite,
+
 ```bibtex
-@misc{schütz2025afabenchgenericframeworkbenchmarking,
-      title={AFABench: A Generic Framework for Benchmarking Active Feature Acquisition},
-      author={Valter Schütz and Han Wu and Reza Rezvan and Linus Aronsson and Morteza Haghir Chehreghani},
-      year={2025},
-      eprint={2508.14734},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2508.14734},
+@article{aran2025eigcost,
+  author  = {Aran, Dvir},
+  title   = {{EIG-Cost}: Cost-Aware Active Feature Acquisition for
+             Clinical Differential Diagnosis},
+  journal = {Artificial Intelligence in Medicine},
+  year    = {2025},
+  note    = {Under review}
 }
 ```
-# EIG_Cost
+
+---
+
+## License
+
+Code: MIT. Data: subject to [MIMIC-IV Data Use Agreement](https://physionet.org/content/mimiciv/view-license/).

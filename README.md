@@ -145,12 +145,12 @@ Acquisition costs are derived from the 2026 Medicare Physician Fee Schedule (CPT
 ## Citation
 
 ```bibtex
-@article{aran2025eigcost,
-  author  = {Aran, Dvir},
+@article{Bingham2025eigcost,
+  author  = {Bingham, Joseph},
   title   = {{EIG-Cost}: Cost-Aware Active Feature Acquisition for
              Clinical Differential Diagnosis},
-  journal = {Artificial Intelligence in Medicine},
-  year    = {2025},
+  journal = {--},
+  year    = {2026},
   note    = {Under review}
 }
 ```
